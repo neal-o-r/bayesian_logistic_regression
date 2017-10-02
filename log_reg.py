@@ -6,6 +6,8 @@ import seaborn as sns
 import theano.tensor as tt
 from sklearn.metrics import roc_auc_score
 from sklearn.linear_model import LogisticRegression
+from scipy.stats import pearsonr
+
 
 def sklog(X_train,Y_train, X_test, Y_test):
 
@@ -20,7 +22,7 @@ def sklog(X_train,Y_train, X_test, Y_test):
 def predict(X, trace):
 	
 	um = trace['u'].mean(0)
-	bm = trace['b'].mean(0)
+	bm = trace['bs'].mean(0)
 	p = um + np.dot(X, bm)
 
 	return 1 / (1 + np.exp(-p))
@@ -51,8 +53,11 @@ if __name__ == '__main__':
 	with pm.Model() as logistic_model:
 	    
 		u = pm.Normal('u', 0, sd=10)
-		b = pm.Laplace('b', 0.0, b=0.1, shape=X_train.shape[1])
-		p = pm.math.invlogit(u + tt.dot(X_train, b))
+		fs = np.sign(np.asarray([pearsonr(x, Y_train)[0] for x in X_train.T]))
+		b = pm.HalfNormal('b', sd=0.1, shape=X_train.shape[1])
+		bs = pm.Deterministic('bs', tt.mul(fs, b))
+		
+		p = pm.math.invlogit(u + tt.dot(X_train, bs))
 
 		likelihood = pm.Bernoulli('likelihood', p, observed=Y_train)
 
