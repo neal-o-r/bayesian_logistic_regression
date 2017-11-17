@@ -28,6 +28,30 @@ def predict(X, trace):
 	return 1 / (1 + np.exp(-p))
 
 
+def pymc_train(X_train, Y_train, X_test, Y_test, penalty='L2'):
+
+
+	fs = np.sign(np.asarray([pearsonr(x, Y_train)[0] for x in X_train.T]))
+
+	with pm.Model() as logistic_model:
+	   
+                if penalty is 'L2':
+                        b = pm.Bound(pm.Normal, lower=0)(
+                                        'b', sd=1., shape=X_train.shape[0])
+                else:
+                        b = pm.Bound(pm.Laplace, lower=0)(
+                                        'b', b=1., shape=X_train.shape[0])
+
+
+		u = pm.Normal('u', 0, sd=10)
+		bs = pm.Deterministic('bs', tt.mul(fs, b))
+		
+		p = pm.math.invlogit(u + tt.dot(X_train, bs))
+
+		likelihood = pm.Bernoulli('likelihood', p, observed=Y_train)
+
+		return pm.sample(10000)
+
 
 if __name__ == '__main__':
 
@@ -49,20 +73,7 @@ if __name__ == '__main__':
 	X_train = (X_train - X_train.mean(0)) / X_train.std(0)
 	X_test  = (X_test - X_test.mean(0)) / X_test.std(0)
 
-
-	with pm.Model() as logistic_model:
-	    
-		u = pm.Normal('u', 0, sd=10)
-		fs = np.sign(np.asarray([pearsonr(x, Y_train)[0] for x in X_train.T]))
-		b = pm.HalfNormal('b', sd=0.1, shape=X_train.shape[1])
-		bs = pm.Deterministic('bs', tt.mul(fs, b))
-		
-		p = pm.math.invlogit(u + tt.dot(X_train, bs))
-
-		likelihood = pm.Bernoulli('likelihood', p, observed=Y_train)
-
-		tr = pm.sample(10000)
-
+        tr = pymc_train(X_train, Y_train, X_test, Y_test)
 	ps = predict(X_test, tr)
 
 	print('PyMC model acuracy {0:.3f}'.format(roc_auc_score(Y_test, ps)))
